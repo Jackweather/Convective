@@ -480,6 +480,25 @@
       refreshTimer = window.setInterval(refreshArchive, REFRESH_INTERVAL_MS);
     }
 
+    function changeRunBy(offset) {
+      if (!runs.length) {
+        return;
+      }
+
+      const selectedIndex = runs.findIndex((run) => run.run_name === runSelect.value);
+      let baseIndex = selectedIndex >= 0 ? selectedIndex : 0;
+      let nextIndex = baseIndex + offset;
+      if (nextIndex < 0) nextIndex = 0;
+      if (nextIndex >= runs.length) nextIndex = runs.length - 1;
+      if (nextIndex === baseIndex) {
+        // If already at the edge, do nothing
+        return;
+      }
+      const nextRun = runs[nextIndex];
+      runSelect.value = nextRun.run_name;
+      loadRun(nextRun.run_name);
+    }
+
     async function loadRuns() {
       try {
         showLoading('Loading archive', 'Checking the archive for saved convective outlook PNGs.', 0, 0);
@@ -526,11 +545,23 @@
       }
 
       if (event.key === 'ArrowLeft') {
+        event.preventDefault();
         renderFrame(Math.max(currentIndex - 1, 0));
       }
 
       if (event.key === 'ArrowRight') {
+        event.preventDefault();
         renderFrame(Math.min(currentIndex + 1, frames.length - 1));
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        changeRunBy(-1);
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        changeRunBy(1);
       }
     });
 
