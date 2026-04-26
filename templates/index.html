@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GFS Convective Outlook Archive</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: rgba(10, 19, 35, 0.92);
+      --panel-strong: rgba(6, 13, 25, 0.96);
+      --text: #f3f7ff;
+      --muted: #9db1cc;
+      --accent: #66d9ef;
+      --accent-strong: #8ef6ff;
+      --border: rgba(157, 177, 204, 0.22);
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(102, 217, 239, 0.12), transparent 32%),
+        linear-gradient(180deg, #10213d 0%, var(--bg) 38%, #050a12 100%);
+    }
+
+    .page {
+      min-height: 100vh;
+    }
+
+    .viewer {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 100vh;
+    }
+
+    .viewer.is-loading .controls {
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 20px 0;
+      min-height: 0;
+    }
+
+    .image-shell {
+      position: relative;
+      width: 100%;
+      height: calc(100vh - 150px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      background: rgba(4, 10, 20, 0.78);
+      box-shadow: var(--shadow);
+    }
+
+    .image-shell img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .loading-screen {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      background:
+        linear-gradient(180deg, rgba(6, 13, 25, 0.84), rgba(3, 8, 16, 0.94)),
+        radial-gradient(circle at top, rgba(102, 217, 239, 0.18), transparent 40%);
+      z-index: 5;
+      transition: opacity 220ms ease, visibility 220ms ease;
+    }
+
+    .loading-screen.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loading-card {
+      width: min(440px, 100%);
+      padding: 24px 22px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: rgba(8, 16, 30, 0.88);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+      text-align: center;
+    }
+
+    .loading-spinner {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      border: 3px solid rgba(102, 217, 239, 0.18);
+      border-top-color: var(--accent);
+      animation: spin 0.9s linear infinite;
+    }
+
+    .loading-title {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .loading-copy {
+      margin: 10px 0 18px;
+      color: var(--muted);
+      font-size: 0.96rem;
+      line-height: 1.5;
+    }
+
+    .loading-progress {
+      display: grid;
+      gap: 10px;
+    }
+
+    .loading-bar {
+      width: 100%;
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .loading-bar-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #4bc0d9 0%, var(--accent-strong) 100%);
+      transition: width 160ms ease;
+    }
+
+    .loading-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .empty-state {
+      display: grid;
+      place-items: center;
+      width: 100%;
+      height: 100%;
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+
+    .is-hidden {
+      display: none !important;
+    }
+
+    .controls {
+      position: sticky;
+      bottom: 0;
+      display: grid;
+      gap: 8px;
+      padding: 10px 12px 8px;
+      background: var(--panel-strong);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.22);
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+      gap: 8px;
+      align-items: end;
+    }
+
+    .field {
+      min-width: 0;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    select,
+    input[type="range"] {
+      width: 100%;
+    }
+
+    select {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 0.9rem;
+      color-scheme: dark;
+      appearance: none;
+    }
+
+    select option {
+      background: #0b1628;
+      color: var(--text);
+    }
+
+    select:focus,
+    input[type="range"]:focus {
+      outline: 2px solid rgba(102, 217, 239, 0.45);
+      outline-offset: 2px;
+    }
+
+    input[type="range"] {
+      accent-color: var(--accent);
+      margin: 0;
+    }
+
+    .slider-stack {
+      display: grid;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .current-hour {
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: right;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .image-shell {
+        height: calc(100vh - 190px);
+      }
+
+      .control-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .stage {
+        padding: 12px 12px 0;
+      }
+
+      .image-shell {
+        height: calc(100vh - 210px);
+        border-radius: 12px;
+      }
+
+      .controls {
+        padding: 9px 10px 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div id="viewer" class="viewer is-loading">
+      <main class="stage">
+        <section class="image-shell">
+          <div id="loadingScreen" class="loading-screen" aria-live="polite">
+            <div class="loading-card">
+              <div class="loading-spinner" aria-hidden="true"></div>
+              <p id="loadingTitle" class="loading-title">Loading convective archive</p>
+              <p id="loadingCopy" class="loading-copy">Preparing saved PNGs for the selected run.</p>
+              <div class="loading-progress">
+                <div class="loading-bar" aria-hidden="true">
+                  <div id="loadingBarFill" class="loading-bar-fill"></div>
+                </div>
+                <div class="loading-meta">
+                  <span id="loadingCount">0 / 0</span>
+                  <span id="loadingPercent">0%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <img id="outlookImage" alt="Convective outlook frame" class="is-hidden">
+          <div id="emptyState" class="empty-state">No archived PNGs found yet.</div>
+        </section>
+      </main>
+
+      <section class="controls">
+        <div class="control-row">
+          <div class="field">
+            <label for="runSelect">Archived Run</label>
+            <select id="runSelect" disabled>
+              <option>Loading runs...</option>
+            </select>
+          </div>
+
+          <div class="field slider-stack">
+            <label for="frameSlider">Forecast Hour</label>
+            <input id="frameSlider" type="range" min="0" max="0" value="0" step="1" disabled>
+            <div class="current-hour">Hour <span id="currentHour">0</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const viewer = document.getElementById('viewer');
+    const runSelect = document.getElementById('runSelect');
+    const frameSlider = document.getElementById('frameSlider');
+    const outlookImage = document.getElementById('outlookImage');
+    const emptyState = document.getElementById('emptyState');
+    const loadingScreen = document.getElementById('loadingScreen');
+    const loadingTitle = document.getElementById('loadingTitle');
+    const loadingCopy = document.getElementById('loadingCopy');
+    const loadingBarFill = document.getElementById('loadingBarFill');
+    const loadingCount = document.getElementById('loadingCount');
+    const loadingPercent = document.getElementById('loadingPercent');
+    const currentHour = document.getElementById('currentHour');
+
+    let runs = [];
+    let frames = [];
+    let currentIndex = 0;
+
+    function setFrameControlsDisabled(disabled) {
+      frameSlider.disabled = disabled;
+    }
+
+    function setLoadingProgress(loadedCount, totalCount) {
+      const safeTotal = Math.max(totalCount, 1);
+      const percent = totalCount ? Math.round((loadedCount / safeTotal) * 100) : 0;
+      loadingBarFill.style.width = `${percent}%`;
+      loadingCount.textContent = `${loadedCount} / ${totalCount}`;
+      loadingPercent.textContent = `${percent}%`;
+    }
+
+    function showLoading(title, copy, loadedCount = 0, totalCount = 0) {
+      viewer.classList.add('is-loading');
+      loadingTitle.textContent = title;
+      loadingCopy.textContent = copy;
+      setLoadingProgress(loadedCount, totalCount);
+      loadingScreen.classList.remove('is-hidden');
+    }
+
+    function hideLoading() {
+      viewer.classList.remove('is-loading');
+      loadingScreen.classList.add('is-hidden');
+    }
+
+    function formatForecastHour(hour) {
+      return String(hour);
+    }
+
+    function renderFrame(index) {
+      if (!frames.length) {
+        return;
+      }
+
+      currentIndex = Math.max(0, Math.min(index, frames.length - 1));
+      const frame = frames[currentIndex];
+      frameSlider.value = String(currentIndex);
+      currentHour.textContent = formatForecastHour(frame.forecast_hour);
+      outlookImage.src = `${frame.image_path}?t=${Date.now()}`;
+      outlookImage.classList.remove('is-hidden');
+      emptyState.classList.add('is-hidden');
+    }
+
+    async function loadRun(runName) {
+      try {
+        showLoading('Loading run imagery', 'Preparing saved convective outlook PNGs for the selected archive run.', 0, frames.length || 0);
+        const response = await fetch(`/api/runs/${encodeURIComponent(runName)}`);
+        const payload = await response.json();
+
+        if (!response.ok || !payload.frames.length) {
+          frames = [];
+          emptyState.classList.remove('is-hidden');
+          outlookImage.classList.add('is-hidden');
+          emptyState.textContent = 'This archived run does not contain viewable PNG frames.';
+          setFrameControlsDisabled(true);
+          hideLoading();
+          return;
+        }
+
+        frames = payload.frames;
+        frameSlider.max = String(frames.length - 1);
+        setLoadingProgress(frames.length, frames.length);
+        setFrameControlsDisabled(false);
+        renderFrame(0);
+        hideLoading();
+      } catch (error) {
+        emptyState.classList.remove('is-hidden');
+        outlookImage.classList.add('is-hidden');
+        emptyState.textContent = 'The viewer could not load run details from the server.';
+        setFrameControlsDisabled(true);
+        hideLoading();
+      }
+    }
+
+    async function loadRuns() {
+      try {
+        showLoading('Loading archive', 'Checking the archive for saved convective outlook PNGs.', 0, 0);
+        const response = await fetch('/api/runs');
+        const payload = await response.json();
+
+        if (!response.ok || !payload.runs.length) {
+          runSelect.innerHTML = '<option>No archived runs</option>';
+          runSelect.disabled = true;
+          emptyState.classList.remove('is-hidden');
+          outlookImage.classList.add('is-hidden');
+          setFrameControlsDisabled(true);
+          hideLoading();
+          return;
+        }
+
+        runs = payload.runs;
+        runSelect.innerHTML = runs
+          .map((run) => `<option value="${run.run_name}">${run.run_name}</option>`)
+          .join('');
+        runSelect.disabled = false;
+        await loadRun(runs[0].run_name);
+      } catch (error) {
+        runSelect.innerHTML = '<option>Archive unavailable</option>';
+        runSelect.disabled = true;
+        setFrameControlsDisabled(true);
+        emptyState.classList.remove('is-hidden');
+        outlookImage.classList.add('is-hidden');
+        hideLoading();
+      }
+    }
+
+    runSelect.addEventListener('change', (event) => {
+      loadRun(event.target.value);
+    });
+
+    frameSlider.addEventListener('input', (event) => {
+      renderFrame(Number(event.target.value));
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (!frames.length) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        renderFrame(Math.max(currentIndex - 1, 0));
+      }
+
+      if (event.key === 'ArrowRight') {
+        renderFrame(Math.min(currentIndex + 1, frames.length - 1));
+      }
+    });
+
+    setFrameControlsDisabled(true);
+    loadRuns();
+  </script>
+</body>
+</html>
