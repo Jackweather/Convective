@@ -402,7 +402,7 @@
       emptyState.classList.add('is-hidden');
     }
 
-    async function loadRun(runName) {
+    async function loadRun(runName, preserveHour = true) {
       try {
         showLoading('Loading run imagery', 'Preparing saved convective outlook PNGs for the selected archive run.', 0, frames.length || 0);
         const response = await fetch(`/api/runs/${encodeURIComponent(runName)}`);
@@ -418,11 +418,20 @@
           return;
         }
 
+        let targetIndex = 0;
+        if (preserveHour && frames.length && typeof frames[currentIndex] !== 'undefined') {
+          const targetHour = frames[currentIndex].forecast_hour;
+          const match = payload.frames.findIndex(f => f.forecast_hour === targetHour);
+          if (match !== -1) {
+            targetIndex = match;
+          }
+        }
+
         frames = payload.frames;
         frameSlider.max = String(frames.length - 1);
         setLoadingProgress(frames.length, frames.length);
         setFrameControlsDisabled(false);
-        renderFrame(0);
+        renderFrame(targetIndex);
         hideLoading();
       } catch (error) {
         emptyState.classList.remove('is-hidden');
@@ -496,7 +505,7 @@
       }
       const nextRun = runs[nextIndex];
       runSelect.value = nextRun.run_name;
-      loadRun(nextRun.run_name);
+      loadRun(nextRun.run_name, true);
     }
 
     async function loadRuns() {
@@ -532,7 +541,7 @@
     }
 
     runSelect.addEventListener('change', (event) => {
-      loadRun(event.target.value);
+      loadRun(event.target.value, true);
     });
 
     frameSlider.addEventListener('input', (event) => {
