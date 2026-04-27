@@ -320,6 +320,9 @@
             <div class="current-hour">Hour <span id="currentHour">0</span></div>
           </div>
         </div>
+        <div style="text-align:center; margin-top:10px;">
+          <button id="toggleTypeBtn" style="padding:8px 18px; border-radius:8px; background:var(--accent); color:var(--bg); font-weight:600; border:none; cursor:pointer;">View Thunderstorm PNGs</button>
+        </div>
       </section>
     </div>
   </main>
@@ -338,10 +341,12 @@
     const loadingPercent = document.getElementById('loadingPercent');
     const currentHour = document.getElementById('currentHour');
 
+
     let runs = [];
     let frames = [];
     let currentIndex = 0;
     let refreshTimer = null;
+    let showingThunderstorm = false;
 
     const REFRESH_INTERVAL_MS = 15000;
 
@@ -397,22 +402,31 @@
       const frame = frames[currentIndex];
       frameSlider.value = String(currentIndex);
       currentHour.textContent = formatForecastHour(frame.forecast_hour);
-      outlookImage.src = `${frame.image_path}?t=${Date.now()}`;
+      let imgPath = frame.image_path;
+      if (showingThunderstorm) {
+        imgPath = imgPath.replace('/images/', '/thunderstorm-images/');
+      }
+      outlookImage.src = `${imgPath}?t=${Date.now()}`;
       outlookImage.classList.remove('is-hidden');
       emptyState.classList.add('is-hidden');
     }
 
     async function loadRun(runName, preserveHour = true) {
       try {
-        showLoading('Loading run imagery', 'Preparing saved convective outlook PNGs for the selected archive run.', 0, frames.length || 0);
-        const response = await fetch(`/api/runs/${encodeURIComponent(runName)}`);
-        const payload = await response.json();
+        showLoading('Loading run imagery', showingThunderstorm ? 'Preparing saved thunderstorm PNGs for the selected archive run.' : 'Preparing saved convective outlook PNGs for the selected archive run.', 0, frames.length || 0);
+        let response, payload;
+        if (showingThunderstorm) {
+          response = await fetch(`/api/thunderstorm-runs/${encodeURIComponent(runName)}`);
+        } else {
+          response = await fetch(`/api/runs/${encodeURIComponent(runName)}`);
+        }
+        payload = await response.json();
 
         if (!response.ok || !payload.frames.length) {
           frames = [];
           emptyState.classList.remove('is-hidden');
           outlookImage.classList.add('is-hidden');
-          emptyState.textContent = 'This archived run does not contain viewable PNG frames.';
+          emptyState.textContent = showingThunderstorm ? 'This archived run does not contain viewable thunderstorm PNG frames.' : 'This archived run does not contain viewable PNG frames.';
           setFrameControlsDisabled(true);
           hideLoading();
           return;
@@ -441,6 +455,13 @@
         hideLoading();
       }
     }
+    // Toggle button logic
+    const toggleTypeBtn = document.getElementById('toggleTypeBtn');
+    toggleTypeBtn.addEventListener('click', () => {
+      showingThunderstorm = !showingThunderstorm;
+      toggleTypeBtn.textContent = showingThunderstorm ? 'View Convective PNGs' : 'View Thunderstorm PNGs';
+      loadRuns();
+    });
 
     async function refreshArchive() {
       if (viewer.classList.contains('is-loading')) {
@@ -510,9 +531,14 @@
 
     async function loadRuns() {
       try {
-        showLoading('Loading archive', 'Checking the archive for saved convective outlook PNGs.', 0, 0);
-        const response = await fetch('/api/runs');
-        const payload = await response.json();
+        showLoading('Loading archive', showingThunderstorm ? 'Checking the archive for saved thunderstorm PNGs.' : 'Checking the archive for saved convective outlook PNGs.', 0, 0);
+        let response, payload;
+        if (showingThunderstorm) {
+          response = await fetch('/api/thunderstorm-runs');
+        } else {
+          response = await fetch('/api/runs');
+        }
+        payload = await response.json();
 
         if (!response.ok || !payload.runs.length) {
           runSelect.innerHTML = '<option>No archived runs</option>';
